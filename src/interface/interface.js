@@ -1,0 +1,210 @@
+const formularioDownload = document.getElementById('formulario-download');
+const campoUrl = document.getElementById('url-conteudo');
+const campoPasta = document.getElementById('pasta-destino');
+const botaoSelecionarPasta = document.getElementById('botao-selecionar-pasta');
+const botaoBaixar = document.getElementById('botao-baixar');
+const botaoCancelar = document.getElementById('botao-cancelar');
+const barraProgresso = document.getElementById('barra-progresso');
+const trilhoProgresso = document.querySelector('.trilho-progresso');
+const textoPercentual = document.getElementById('texto-percentual');
+const textoStatus = document.getElementById('texto-status');
+const textoVelocidade = document.getElementById('texto-velocidade');
+const textoTempoRestante = document.getElementById('texto-tempo-restante');
+const mensagem = document.getElementById('mensagem');
+
+let downloadEmAndamento = false;
+
+document.addEventListener('click', evento => {
+    const link = evento.target.closest('a[href]');
+
+    if (!link) {
+        return;
+    }
+
+    evento.preventDefault();
+    window.apiMPTreco.abrirLinkExterno(link.href);
+});
+
+function mostrarMensagem(texto, tipo = 'informacao') {
+    mensagem.textContent = texto;
+    mensagem.className = `mensagem ${tipo}`;
+    mensagem.hidden = false;
+}
+
+function ocultarMensagem() {
+    mensagem.textContent = '';
+    mensagem.className = 'mensagem';
+    mensagem.hidden = true;
+}
+
+function alterarEstadoDownload(emAndamento) {
+    downloadEmAndamento = emAndamento;
+    botaoBaixar.disabled = emAndamento;
+    botaoCancelar.disabled = !emAndamento;
+    botaoSelecionarPasta.disabled = emAndamento;
+    campoUrl.disabled = emAndamento;
+
+    document.querySelectorAll('input[name="formato"]').forEach(campo => {
+        campo.disabled = emAndamento;
+    });
+}
+
+function atualizarProgresso({
+    percentual = 0,
+    velocidade = '',
+    tempoRestante = ''
+}) {
+    const percentualSeguro = Math.min(
+        100,
+        Math.max(0, Number(percentual) || 0)
+    );
+
+    barraProgresso.style.width = `${percentualSeguro}%`;
+    trilhoProgresso.setAttribute(
+        'aria-valuenow',
+        String(Math.round(percentualSeguro))
+    );
+    textoPercentual.textContent = `${Math.round(percentualSeguro)}%`;
+
+    textoVelocidade.textContent = velocidade
+        ? `Velocidade: ${velocidade}`
+        : '';
+
+    textoTempoRestante.textContent = tempoRestante
+        ? `Tempo restante: ${tempoRestante}`
+        : '';
+}
+
+function redefinirProgresso() {
+    atualizarProgresso({
+        percentual: 0,
+        velocidade: '',
+        tempoRestante: ''
+    });
+    textoStatus.textContent = 'Pronto para iniciar.';
+}
+
+function obterFormatoSelecionado() {
+    const campoSelecionado = document.querySelector(
+        'input[name="formato"]:checked'
+    );
+
+    return campoSelecionado?.value || '';
+}
+
+function validarFormulario() {
+    if (!campoUrl.value.trim()) {
+        mostrarMensagem('Informe o link do conteúdo.', 'erro');
+        campoUrl.focus();
+        return false;
+    }
+
+    if (!campoPasta.value.trim()) {
+        mostrarMensagem('Escolha a pasta de destino.', 'erro');
+        botaoSelecionarPasta.focus();
+        return false;
+    }
+
+    return true;
+}
+
+botaoSelecionarPasta.addEventListener('click', async () => {
+    ocultarMensagem();
+
+    const resultado = await window.apiMPTreco.selecionarPasta();
+
+    if (!resultado.cancelado) {
+        campoPasta.value = resultado.pasta;
+    }
+});
+
+formularioDownload.addEventListener('submit', async evento => {
+    evento.preventDefault();
+    ocultarMensagem();
+
+    if (!validarFormulario()) {
+        return;
+    }
+
+    redefinirProgresso();
+    alterarEstadoDownload(true);
+    textoStatus.textContent = 'Preparando o download...';
+
+    const resultado = await window.apiMPTreco.iniciarDownload({
+        url: campoUrl.value.trim(),
+        formato: obterFormatoSelecionado(),
+        pastaDestino: campoPasta.value.trim()
+    });
+
+    if (!resultado.sucesso) {
+        alterarEstadoDownload(false);
+        textoStatus.textContent = 'Não foi possível iniciar.';
+        mostrarMensagem(resultado.mensagem, 'erro');
+    }
+});
+
+botaoCancelar.addEventListener('click', async () => {
+    if (!downloadEmAndamento) {
+        return;
+    }
+
+    botaoCancelar.disabled = true;
+    textoStatus.textContent = 'Cancelando...';
+
+    const resultado = await window.apiMPTreco.cancelarDownload();
+
+    if (!resultado.sucesso) {
+        botaoCancelar.disabled = false;
+        mostrarMensagem(resultado.mensagem, 'erro');
+    }
+});
+
+window.apiMPTreco.aoAtualizarProgresso(dados => {
+    atualizarProgresso(dados);
+});
+
+window.apiMPTreco.aoAtualizarStatus(dados => {
+    if (dados?.mensagem) {
+        textoStatus.textContent = dados.mensagem;
+    }
+});
+
+window.apiMPTreco.aoFinalizarDownload(resultado => {
+    alterarEstadoDownload(false);
+
+    if (resultado.sucesso) {
+        textoStatus.textContent = resultado.mensagem;
+        atualizarProgresso({ percentual: 100 });
+        mostrarMensagem(resultado.mensagem, 'sucesso');
+        return;
+    }
+
+    if (resultado.cancelado) {
+        textoStatus.textContent = 'Cancelado.';
+        mostrarMensagem(resultado.mensagem, 'informacao');
+        return;
+    }
+
+    textoStatus.textContent = 'Falha no download.';
+    mostrarMensagem(resultado.mensagem, 'erro');
+});
+
+async function inicializarAplicacao() {
+    const [resultadoFerramentas, resultadoPasta] = await Promise.all([
+        window.apiMPTreco.verificarFerramentas(),
+        window.apiMPTreco.obterUltimaPasta()
+    ]);
+
+    if (resultadoPasta.pasta) {
+        campoPasta.value = resultadoPasta.pasta;
+    }
+
+    if (!resultadoFerramentas.pronto) {
+        mostrarMensagem(
+            `Ferramentas ausentes: ${resultadoFerramentas.ausentes.join(', ')}. Execute "npm install" ou "npm run preparar".`,
+            'erro'
+        );
+    }
+}
+
+inicializarAplicacao();

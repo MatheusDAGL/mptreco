@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta
+        http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:;"
+    >
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MPTreco</title>
+    <link rel="stylesheet" href="./estilos.css">
+</head>
+<body>
+    <main class="aplicacao">
+        <section class="cabecalho">
+            <h1>MPTreco</h1>
+        </section>
+
+        <section class="painel" aria-labelledby="titulo-formulario">
+
+            <form id="formulario-download" novalidate>
+                <div class="grupo-campo">
+                    <label for="url-conteudo">Link do conteúdo</label>
+                    <input
+                        id="url-conteudo"
+                        name="url-conteudo"
+                        type="url"
+                        placeholder="https://exemplo.com/video"
+                        autocomplete="off"
+                        spellcheck="false"
+                        required
+                    >
+                    <small>São aceitos links de <a href="https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md" target="_blank" rel="noopener noreferrer">sites compatíveis</a> com o yt-dlp.</small>
+                </div>
+
+                <fieldset class="grupo-campo">
+                    <legend>Formato</legend>
+
+                    <div class="opcoes-formato">
+                        <label class="cartao-radio">
+                            <input
+                                type="radio"
+                                name="formato"
+                                value="video"
+                                checked
+                            >
+                            <span>
+                                <strong>Vídeo</strong>
+                                <small>Arquivo MP4</small>
+                            </span>
+                        </label>
+
+                        <label class="cartao-radio">
+                            <input
+                                type="radio"
+                                name="formato"
+                                value="mp3"
+                            >
+                            <span>
+                                <strong>Áudio</strong>
+                                <small>Arquivo MP3</small>
+                            </span>
+                        </label>
+                    </div>
+                </fieldset>
+
+                <div class="grupo-campo">
+                    <label for="pasta-destino">Pasta de destino</label>
+
+                    <div class="seletor-pasta">
+                        <input
+                            id="pasta-destino"
+                            name="pasta-destino"
+                            type="text"
+                            placeholder="Nenhuma pasta selecionada"
+                            readonly
+                            required
+                        >
+                        <button
+                            id="botao-selecionar-pasta"
+                            class="botao botao-secundario"
+                            type="button"
+                        >
+                            Escolher pasta
+                        </button>
+                    </div>
+                </div>
+
+                <div
+                    id="area-progresso"
+                    class="area-progresso"
+                    aria-live="polite"
+                >
+                    <div class="linha-progresso">
+                        <span id="texto-status">Pronto para iniciar.</span>
+                        <strong id="texto-percentual">0%</strong>
+                    </div>
+
+                    <div
+                        class="trilho-progresso"
+                        role="progressbar"
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                        aria-valuenow="0"
+                        aria-label="Progresso do download"
+                    >
+                        <div id="barra-progresso" class="barra-progresso"></div>
+                    </div>
+
+                    <div class="detalhes-progresso">
+                        <span id="texto-velocidade"></span>
+                        <span id="texto-tempo-restante"></span>
+                    </div>
+                </div>
+
+                <div id="mensagem" class="mensagem" role="alert" hidden></div>
+
+                <div class="acoes">
+                    <button
+                        id="botao-baixar"
+                        class="botao botao-primario"
+                        type="submit"
+                    >
+                        Baixar
+                    </button>
+
+                    <button
+                        id="botao-cancelar"
+                        class="botao botao-perigo"
+                        type="button"
+                        disabled
+                    >
+                        Cancelar
+                    </button>
+                </div>
+            </form>
+        </section>
+
+    </main>
+
+    <script src="./interface.js"></script>
+</body>
+</html>

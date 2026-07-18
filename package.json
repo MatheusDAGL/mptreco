@@ -1,0 +1,49 @@
+{
+  "name": "mptreco",
+  "version": "1.0.0",
+  "description": "Aplicativo para baixar vídeos e áudios de sites compatíveis com yt-dlp.",
+  "author": {
+    "name": "MatheusDAGL"
+  },
+  "main": "src/principal.js",
+  "private": true,
+  "scripts": {
+    "postinstall": "node scripts/preparar-ferramentas.js",
+    "preparar": "node scripts/preparar-ferramentas.js",
+    "start": "electron .",
+    "dist": "electron-builder --win nsis"
+  },
+  "dependencies": {
+    "ffmpeg-static": "^5.2.0",
+    "ffprobe-static": "^3.1.0"
+  },
+  "devDependencies": {
+    "electron": "^43.0.0",
+    "electron-builder": "^26.0.12"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "build": {
+    "appId": "com.matheusdagl.mptreco",
+    "productName": "MPTreco",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "bin",
+        "to": "bin"
+      }
+    ],
+        "win": {
+            "target": "nsis",
+            "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
