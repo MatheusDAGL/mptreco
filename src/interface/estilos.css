@@ -2,8 +2,8 @@
     font-family:
         Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
         "Segoe UI", sans-serif;
-    color: #1f2933;
-    background: #f4f6f8;
+    color: #f7f7f8;
+    background: #090909;
     font-synthesis: none;
 }
 
@@ -16,8 +16,9 @@ body {
     min-height: 100vh;
     margin: 0;
     background:
-        radial-gradient(circle at top right, rgba(38, 132, 255, 0.10), transparent 35%),
-        #f4f6f8;
+        radial-gradient(circle at 92% 3%, rgba(255, 104, 31, 0.16), transparent 31%),
+        radial-gradient(circle at 6% 92%, rgba(172, 14, 25, 0.13), transparent 28%),
+        #090909;
 }
 
 button,
@@ -25,10 +26,19 @@ input {
     font: inherit;
 }
 
+a {
+    color: #ff8a38;
+    text-decoration-color: rgba(255, 138, 56, 0.55);
+}
+
+a:hover {
+    color: #ffb05b;
+}
+
 .aplicacao {
     width: min(680px, calc(100% - 48px));
     margin: 0 auto;
-    padding: 46px 0 30px;
+    padding: 30px 0 36px;
 }
 
 .cabecalho {
@@ -38,7 +48,7 @@ input {
 .rotulo-superior {
     display: inline-block;
     margin-bottom: 8px;
-    color: #2864dc;
+    color: #ff8a38;
     font-size: 12px;
     font-weight: 750;
     letter-spacing: 0.08em;
@@ -53,29 +63,31 @@ p {
 
 h1 {
     margin-bottom: 8px;
-    color: #142033;
-    font-size: 34px;
+    color: #fff;
+    font-size: 36px;
     line-height: 1.14;
+    letter-spacing: -0.04em;
+    text-align: center;
 }
 
 .cabecalho p {
     margin-bottom: 0;
-    color: #657184;
+    color: #a8a8ad;
     font-size: 15px;
     line-height: 1.6;
 }
 
 .painel {
     padding: 28px;
-    border: 1px solid #dde3ea;
-    border-radius: 16px;
-    background: #ffffff;
-    box-shadow: 0 18px 50px rgba(27, 45, 75, 0.08);
+    border: 1px solid #2e2e31;
+    border-radius: 18px;
+    background: linear-gradient(145deg, rgba(35, 35, 37, 0.98), rgba(20, 20, 21, 0.98));
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.46);
 }
 
 .painel h2 {
     margin-bottom: 24px;
-    color: #182437;
+    color: #fff;
     font-size: 19px;
 }
 
@@ -90,7 +102,7 @@ h1 {
 .grupo-campo > legend {
     display: block;
     margin-bottom: 9px;
-    color: #263448;
+    color: #f0f0f2;
     font-size: 14px;
     font-weight: 700;
 }
@@ -98,7 +110,7 @@ h1 {
 .grupo-campo > small {
     display: block;
     margin-top: 7px;
-    color: #7b8798;
+    color: #9b9ba1;
     font-size: 12px;
 }
 
@@ -107,25 +119,33 @@ input[type="text"] {
     width: 100%;
     height: 44px;
     padding: 0 13px;
-    border: 1px solid #cfd7e2;
+    border: 1px solid #424247;
     border-radius: 9px;
     outline: none;
-    color: #172235;
-    background: #ffffff;
+    color: #fafafa;
+    background: #151516;
+    caret-color: #ff8535;
     transition:
         border-color 140ms ease,
-        box-shadow 140ms ease;
+        box-shadow 140ms ease,
+        background 140ms ease;
+}
+
+input[type="url"]::placeholder,
+input[type="text"]::placeholder {
+    color: #76767c;
 }
 
 input[type="url"]:focus,
 input[type="text"]:focus {
-    border-color: #3776ea;
-    box-shadow: 0 0 0 3px rgba(55, 118, 234, 0.14);
+    border-color: #ff7430;
+    background: #1a1a1b;
+    box-shadow: 0 0 0 3px rgba(255, 91, 37, 0.2);
 }
 
 input[readonly] {
-    color: #526075;
-    background: #f8fafc;
+    color: #b7b7bc;
+    background: #111112;
 }
 
 .opcoes-formato {
@@ -140,24 +160,46 @@ input[readonly] {
     align-items: center;
     gap: 12px;
     padding: 14px;
-    border: 1px solid #d7dee7;
+    border: 1px solid #3d3d42;
     border-radius: 10px;
+    background: #171718;
     cursor: pointer;
     transition:
         border-color 140ms ease,
-        background 140ms ease;
+        background 140ms ease,
+        box-shadow 140ms ease;
+}
+
+.cartao-radio:hover {
+    border-color: #69696f;
+    background: #1d1d1f;
+}
+
+.cartao-radio:has(input:disabled) {
+    cursor: not-allowed;
+    opacity: 0.48;
+}
+
+.cartao-radio:has(input:disabled):hover {
+    border-color: #3d3d42;
+    background: #171718;
+}
+
+.cartao-radio input:disabled {
+    pointer-events: none;
 }
 
 .cartao-radio:has(input:checked) {
-    border-color: #3776ea;
-    background: #f2f7ff;
+    border-color: #ff6c2f;
+    background: linear-gradient(120deg, rgba(183, 24, 26, 0.24), rgba(246, 100, 28, 0.18));
+    box-shadow: inset 0 0 0 1px rgba(255, 122, 48, 0.16);
 }
 
 .cartao-radio input {
     width: 17px;
     height: 17px;
     margin: 0;
-    accent-color: #2864dc;
+    accent-color: #ee4c28;
 }
 
 .cartao-radio span {
@@ -166,12 +208,12 @@ input[readonly] {
 }
 
 .cartao-radio strong {
-    color: #223047;
+    color: #f6f6f7;
     font-size: 14px;
 }
 
 .cartao-radio small {
-    color: #788599;
+    color: #9d9da3;
     font-size: 12px;
 }
 
@@ -192,6 +234,8 @@ input[readonly] {
     transition:
         opacity 140ms ease,
         transform 140ms ease,
+        filter 140ms ease,
+        border-color 140ms ease,
         background 140ms ease;
 }
 
@@ -199,47 +243,56 @@ input[readonly] {
     transform: translateY(1px);
 }
 
+.botao:focus-visible {
+    outline: 3px solid rgba(255, 127, 48, 0.38);
+    outline-offset: 2px;
+}
+
 .botao:disabled {
     cursor: not-allowed;
-    opacity: 0.5;
+    opacity: 0.46;
 }
 
 .botao-primario {
     min-width: 130px;
-    color: #ffffff;
-    background: #2864dc;
+    color: #fff;
+    background: linear-gradient(105deg, #ba1624, #e43b28 48%, #ff7a29);
+    box-shadow: 0 8px 20px rgba(202, 46, 28, 0.28);
 }
 
 .botao-primario:not(:disabled):hover {
-    background: #1f55c3;
+    filter: brightness(1.12);
 }
 
 .botao-secundario {
-    border: 1px solid #cdd6e0;
-    color: #334258;
-    background: #ffffff;
+    border: 1px solid #6a3930;
+    color: #ffd0ab;
+    background: linear-gradient(110deg, rgba(138, 23, 27, 0.42), rgba(184, 64, 27, 0.38));
 }
 
 .botao-secundario:not(:disabled):hover {
-    background: #f5f7fa;
+    border-color: #d4572c;
+    background: linear-gradient(110deg, rgba(172, 29, 31, 0.56), rgba(226, 83, 29, 0.5));
 }
 
 .botao-perigo {
     min-width: 110px;
-    color: #a32929;
-    background: #fdecec;
+    border: 1px solid #71312f;
+    color: #ffc7be;
+    background: #321819;
 }
 
 .botao-perigo:not(:disabled):hover {
-    background: #f9dede;
+    border-color: #b74a40;
+    background: #482021;
 }
 
 .area-progresso {
     margin-top: 6px;
     padding: 16px;
-    border: 1px solid #dfe5ec;
+    border: 1px solid #37373a;
     border-radius: 10px;
-    background: #f8fafc;
+    background: #121213;
 }
 
 .linha-progresso,
@@ -252,12 +305,12 @@ input[readonly] {
 
 .linha-progresso {
     margin-bottom: 11px;
-    color: #4b5b70;
+    color: #c8c8cc;
     font-size: 13px;
 }
 
 .linha-progresso strong {
-    color: #24344c;
+    color: #fff;
 }
 
 .trilho-progresso {
@@ -265,21 +318,21 @@ input[readonly] {
     height: 9px;
     overflow: hidden;
     border-radius: 999px;
-    background: #dfe5ec;
+    background: #333336;
 }
 
 .barra-progresso {
     width: 0;
     height: 100%;
     border-radius: inherit;
-    background: #2864dc;
+    background: linear-gradient(90deg, #bc1826, #ed4829 55%, #ff7b2c);
     transition: width 220ms ease;
 }
 
 .detalhes-progresso {
     min-height: 18px;
     margin-top: 8px;
-    color: #7b8797;
+    color: #96969c;
     font-size: 11px;
 }
 
@@ -292,21 +345,48 @@ input[readonly] {
 }
 
 .mensagem.erro {
-    border: 1px solid #f0bcbc;
-    color: #8d2626;
-    background: #fff1f1;
+    border: 1px solid #813c3d;
+    color: #ffb8b4;
+    background: #321c1e;
 }
 
 .mensagem.sucesso {
-    border: 1px solid #b8dfc5;
-    color: #23613a;
-    background: #effaf2;
+    border: 1px solid #3e6f56;
+    color: #b9edcb;
+    background: #17271e;
+}
+
+.botao-link-mensagem {
+    padding: 0;
+    border: 0;
+    color: #d5f8df;
+    background: transparent;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 700;
+    text-decoration: underline;
+    text-decoration-color: rgba(213, 248, 223, 0.65);
+    text-underline-offset: 2px;
+}
+
+.botao-link-mensagem:hover:not(:disabled) {
+    color: #fff;
+}
+
+.botao-link-mensagem:focus-visible {
+    outline: 2px solid #b9edcb;
+    outline-offset: 3px;
+}
+
+.botao-link-mensagem:disabled {
+    cursor: wait;
+    opacity: 0.65;
 }
 
 .mensagem.informacao {
-    border: 1px solid #bed2f7;
-    color: #285aaf;
-    background: #f0f5ff;
+    border: 1px solid #7a4c31;
+    color: #ffd0a4;
+    background: #2c211a;
 }
 
 .acoes {
@@ -317,7 +397,7 @@ input[readonly] {
 
 .aviso-legal {
     margin: 16px 4px 0;
-    color: #8590a0;
+    color: #89898f;
     font-size: 11px;
     text-align: center;
 }

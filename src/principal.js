@@ -1,11 +1,24 @@
-const { app, BrowserWindow, dialog, ipcMain, Menu, shell } = require('electron');
+const {
+    app,
+    BrowserWindow,
+    dialog,
+    ipcMain,
+    Menu,
+    nativeImage,
+    shell
+} = require('electron');
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
+if (process.platform === 'win32') {
+    app.setAppUserModelId('com.matheusdagl.mptreco');
+}
+
 let janelaPrincipal = null;
 let processoDownload = null;
 let downloadCancelado = false;
+let ultimaPastaDownloadConcluida = '';
 
 function obterCaminhosFerramentas() {
     const extensao = process.platform === 'win32' ? '.exe' : '';
@@ -22,13 +35,17 @@ function obterCaminhosFerramentas() {
 }
 
 function criarJanela() {
+    const caminhoIcone = path.join(__dirname, 'assets', 'mptreco.ico');
+    const iconeAplicacao = nativeImage.createFromPath(caminhoIcone);
+
     janelaPrincipal = new BrowserWindow({
         width: 760,
-        height: 660,
+        height: 730,
         minWidth: 660,
-        minHeight: 600,
+        minHeight: 540,
         show: false,
-        backgroundColor: '#f4f6f8',
+        backgroundColor: '#090909',
+        icon: iconeAplicacao,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
@@ -36,6 +53,15 @@ function criarJanela() {
             sandbox: true
         }
     });
+
+    if (process.platform === 'win32') {
+        janelaPrincipal.setIcon(iconeAplicacao);
+        janelaPrincipal.setAppDetails({
+            appId: 'com.matheusdagl.mptreco',
+            appIconPath: caminhoIcone,
+            appIconIndex: 0
+        });
+    }
 
     Menu.setApplicationMenu(null);
     janelaPrincipal.loadFile(path.join(__dirname, 'interface', 'index.html'));
@@ -165,14 +191,12 @@ function criarArgumentosDownload({ url, formato, pastaDestino }) {
         );
     } else {
         argumentos.push(
+            '--format-sort',
+            'vcodec:h264,res,acodec:aac',
             '--format',
             'bv*+ba/b',
             '--merge-output-format',
-            'mp4',
-            '--remux-video',
-            'mp4',
-            '--format',
-            'bv*+ba/b'
+            'mp4'
         );
     }
 
@@ -362,6 +386,26 @@ ipcMain.handle('abrir-link-externo', async (_evento, url) => {
     return { sucesso: true };
 });
 
+ipcMain.handle('abrir-local-do-arquivo', async () => {
+    if (!validarPasta(ultimaPastaDownloadConcluida)) {
+        return {
+            sucesso: false,
+            mensagem: 'A pasta do arquivo baixado não está mais disponível.'
+        };
+    }
+
+    const erro = await shell.openPath(ultimaPastaDownloadConcluida);
+
+    if (erro) {
+        return {
+            sucesso: false,
+            mensagem: 'Não foi possível abrir a pasta do arquivo baixado.'
+        };
+    }
+
+    return { sucesso: true };
+});
+
 ipcMain.handle('verificar-ferramentas', () => {
     const ferramentas = obterCaminhosFerramentas();
     const ausentes = Object.entries({
@@ -452,7 +496,7 @@ ipcMain.handle('iniciar-download', async (_evento, dados) => {
     }
 
     enviarParaTela('download-status', {
-        mensagem: 'Obtendo informações do conteúdo...'
+        mensagem: 'Fazendo download...'
     });
 
     observarFluxo(
@@ -487,6 +531,7 @@ ipcMain.handle('iniciar-download', async (_evento, dados) => {
         }
 
         if (codigo === 0) {
+            ultimaPastaDownloadConcluida = pastaDestino;
             enviarParaTela('download-progresso', {
                 percentual: 100,
                 velocidade: '',

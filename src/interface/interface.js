@@ -31,6 +31,40 @@ function mostrarMensagem(texto, tipo = 'informacao') {
     mensagem.hidden = false;
 }
 
+function mostrarMensagemConclusao(texto) {
+    mensagem.textContent = '';
+    mensagem.append(document.createTextNode(`${texto} `));
+
+    const botaoAbrirLocal = document.createElement('button');
+    botaoAbrirLocal.type = 'button';
+    botaoAbrirLocal.className = 'botao-link-mensagem';
+    botaoAbrirLocal.textContent = 'Ver na pasta';
+    botaoAbrirLocal.addEventListener('click', async () => {
+        botaoAbrirLocal.disabled = true;
+
+        try {
+            const resultado = await window.apiMPTreco.abrirLocalDoArquivo();
+
+            if (!resultado.sucesso) {
+                mostrarMensagem(resultado.mensagem, 'erro');
+            }
+        } catch {
+            mostrarMensagem(
+                'NÃ£o foi possÃ­vel abrir o local do arquivo.',
+                'erro'
+            );
+        } finally {
+            if (botaoAbrirLocal.isConnected) {
+                botaoAbrirLocal.disabled = false;
+            }
+        }
+    });
+
+    mensagem.append(botaoAbrirLocal);
+    mensagem.className = 'mensagem sucesso';
+    mensagem.hidden = false;
+}
+
 function ocultarMensagem() {
     mensagem.textContent = '';
     mensagem.className = 'mensagem';
@@ -175,7 +209,7 @@ window.apiMPTreco.aoFinalizarDownload(resultado => {
     if (resultado.sucesso) {
         textoStatus.textContent = resultado.mensagem;
         atualizarProgresso({ percentual: 100 });
-        mostrarMensagem(resultado.mensagem, 'sucesso');
+        mostrarMensagemConclusao(resultado.mensagem);
         return;
     }
 
