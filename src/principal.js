@@ -154,7 +154,12 @@ function validarUrlExterna(valor) {
     }
 }
 
-function criarArgumentosDownload({ url, formato, pastaDestino }) {
+function criarArgumentosDownload({
+    url,
+    formato,
+    pastaDestino,
+    navegadorCookies = ''
+}) {
     const ferramentas = obterCaminhosFerramentas();
     const modeloSaida = path.join(
         pastaDestino,
@@ -180,6 +185,10 @@ function criarArgumentosDownload({ url, formato, pastaDestino }) {
         argumentos.push('--windows-filenames');
     }
 
+    if (navegadorCookies) {
+        argumentos.push('--cookies-from-browser', navegadorCookies);
+    }
+
     if (formato === 'mp3') {
         argumentos.push(
             '--extract-audio',
@@ -202,6 +211,31 @@ function criarArgumentosDownload({ url, formato, pastaDestino }) {
 
     argumentos.push(url);
     return argumentos;
+}
+
+function ehUrlYoutube(valor) {
+    try {
+        const hostname = new URL(valor).hostname.toLowerCase();
+
+        return (
+            hostname === 'youtu.be' ||
+            hostname === 'youtube.com' ||
+            hostname.endsWith('.youtube.com') ||
+            hostname === 'youtube-nocookie.com' ||
+            hostname.endsWith('.youtube-nocookie.com')
+        );
+    } catch {
+        return false;
+    }
+}
+
+function ehBloqueioTooManyRequests(linhas) {
+    const texto = linhas.join('\n').toLowerCase();
+
+    return (
+        texto.includes('http error 429') ||
+        texto.includes('too many requests')
+    );
 }
 
 function enviarParaTela(canal, dados) {
@@ -301,7 +335,7 @@ function observarFluxo(
             if (coletorErros && linha.trim()) {
                 coletorErros.push(linha.trim());
 
-                if (coletorErros.length > 20) {
+                if (coletorErros.length > 100) {
                     coletorErros.shift();
                 }
             }
@@ -384,6 +418,28 @@ ipcMain.handle('abrir-link-externo', async (_evento, url) => {
 
     await shell.openExternal(url);
     return { sucesso: true };
+});
+
+ipcMain.on('mostrar-menu-edicao', evento => {
+    const janela = BrowserWindow.fromWebContents(evento.sender);
+
+    if (!janela || janela.isDestroyed()) {
+        return;
+    }
+
+    const menu = Menu.buildFromTemplate([
+        { label: 'Desfazer', role: 'undo' },
+        { label: 'Refazer', role: 'redo' },
+        { type: 'separator' },
+        { label: 'Recortar', role: 'cut' },
+        { label: 'Copiar', role: 'copy' },
+        { label: 'Colar', role: 'paste' },
+        { label: 'Excluir', role: 'delete' },
+        { type: 'separator' },
+        { label: 'Selecionar tudo', role: 'selectAll' }
+    ]);
+
+    menu.popup({ window: janela });
 });
 
 ipcMain.handle('abrir-local-do-arquivo', async () => {
@@ -471,82 +527,18 @@ ipcMain.handle('iniciar-download', async (_evento, dados) => {
         }
     }
 
-    const argumentos = criarArgumentosDownload({
-        url,
-        formato,
-        pastaDestino
-    });
-
-    const errosRecentes = [];
     let caminhoArquivoFinal = '';
     downloadCancelado = false;
 
-    try {
-        processoDownload = spawn(ferramentas.ytDlp, argumentos, {
-            shell: false,
-            windowsHide: true,
-            stdio: ['ignore', 'pipe', 'pipe']
-        });
-    } catch (erro) {
-        processoDownload = null;
-        return {
-            sucesso: false,
-            mensagem: `Não foi possível iniciar o yt-dlp: ${erro.message}`
-        };
-    }
+    const youtube = ehUrlYoutube(url);
+    const fallbacksYoutube = [
+        { id: 'chrome', nome: 'Chrome' },
+        { id: 'edge', nome: 'Edge' },
+        { id: 'firefox', nome: 'Firefox' }
+    ];
+    let fallbackYoutubeAtivado = false;
 
-    enviarParaTela('download-status', {
-        mensagem: 'Fazendo download...'
-    });
-
-    observarFluxo(
-        processoDownload.stdout,
-        null,
-        caminhoArquivo => {
-            caminhoArquivoFinal = caminhoArquivo;
-        }
-    );
-    observarFluxo(processoDownload.stderr, errosRecentes);
-
-    processoDownload.on('error', erro => {
-        enviarParaTela('download-finalizado', {
-            sucesso: false,
-            mensagem: `Falha ao executar o yt-dlp: ${erro.message}`
-        });
-        processoDownload = null;
-    });
-
-    processoDownload.on('close', codigo => {
-        const foiCancelado = downloadCancelado;
-        processoDownload = null;
-        downloadCancelado = false;
-
-        if (foiCancelado) {
-            enviarParaTela('download-finalizado', {
-                sucesso: false,
-                cancelado: true,
-                mensagem: 'Download cancelado.'
-            });
-            return;
-        }
-
-        if (codigo === 0) {
-            ultimaPastaDownloadConcluida = pastaDestino;
-            enviarParaTela('download-progresso', {
-                percentual: 100,
-                velocidade: '',
-                tempoRestante: ''
-            });
-            enviarParaTela('download-finalizado', {
-                sucesso: true,
-                mensagem: criarMensagemDownloadConcluido(
-                    formato,
-                    caminhoArquivoFinal
-                )
-            });
-            return;
-        }
-
+    function finalizarComErro(errosRecentes, codigo) {
         const detalhe = errosRecentes
             .filter(linha => linha.toLowerCase().includes('error'))
             .slice(-3)
@@ -558,7 +550,144 @@ ipcMain.handle('iniciar-download', async (_evento, dados) => {
                 ? `O download falhou. ${detalhe}`
                 : `O yt-dlp foi encerrado com o código ${codigo}.`
         });
-    });
+    }
+
+    function executarTentativa(indiceFallback = -1) {
+        const fallback = indiceFallback >= 0
+            ? fallbacksYoutube[indiceFallback]
+            : null;
+        const errosRecentes = [];
+        let erroExecucao = null;
+        const argumentos = criarArgumentosDownload({
+            url,
+            formato,
+            pastaDestino,
+            navegadorCookies: fallback?.id || ''
+        });
+
+        try {
+            processoDownload = spawn(ferramentas.ytDlp, argumentos, {
+                shell: false,
+                windowsHide: true,
+                stdio: ['ignore', 'pipe', 'pipe']
+            });
+        } catch {
+            processoDownload = null;
+            return false;
+        }
+
+        enviarParaTela('download-status', {
+            mensagem: fallback
+                ? `Tentando o download do YouTube com ${fallback.nome}...`
+                : 'Fazendo download...'
+        });
+
+        observarFluxo(
+            processoDownload.stdout,
+            null,
+            caminhoArquivo => {
+                caminhoArquivoFinal = caminhoArquivo;
+            }
+        );
+        observarFluxo(processoDownload.stderr, errosRecentes);
+
+        processoDownload.on('error', erro => {
+            erroExecucao = erro;
+        });
+
+        processoDownload.on('close', codigo => {
+            const foiCancelado = downloadCancelado;
+            processoDownload = null;
+
+            if (foiCancelado) {
+                downloadCancelado = false;
+                enviarParaTela('download-finalizado', {
+                    sucesso: false,
+                    cancelado: true,
+                    mensagem: 'Download cancelado.'
+                });
+                return;
+            }
+
+            if (codigo === 0) {
+                downloadCancelado = false;
+                ultimaPastaDownloadConcluida = pastaDestino;
+                enviarParaTela('download-progresso', {
+                    percentual: 100,
+                    velocidade: '',
+                    tempoRestante: ''
+                });
+                enviarParaTela('download-finalizado', {
+                    sucesso: true,
+                    mensagem: criarMensagemDownloadConcluido(
+                        formato,
+                        caminhoArquivoFinal
+                    )
+                });
+                return;
+            }
+
+            if (erroExecucao) {
+                downloadCancelado = false;
+                enviarParaTela('download-finalizado', {
+                    sucesso: false,
+                    mensagem: `Falha ao executar o yt-dlp: ${erroExecucao.message}`
+                });
+                return;
+            }
+
+            if (
+                youtube &&
+                indiceFallback === -1 &&
+                ehBloqueioTooManyRequests(errosRecentes)
+            ) {
+                fallbackYoutubeAtivado = true;
+            }
+
+            const proximoIndice = indiceFallback + 1;
+
+            if (
+                fallbackYoutubeAtivado &&
+                proximoIndice < fallbacksYoutube.length
+            ) {
+                enviarParaTela('download-progresso', {
+                    percentual: 0,
+                    velocidade: '',
+                    tempoRestante: ''
+                });
+                if (!executarTentativa(proximoIndice)) {
+                    downloadCancelado = false;
+                    enviarParaTela('download-finalizado', {
+                        sucesso: false,
+                        mensagem: 'Não foi possível iniciar o fallback do YouTube.'
+                    });
+                }
+                return;
+            }
+
+            downloadCancelado = false;
+
+            if (fallbackYoutubeAtivado) {
+                enviarParaTela('download-finalizado', {
+                    sucesso: false,
+                    mensagem:
+                        'Não foi possível realizar o download do YouTube após tentar sem login e com Chrome, Edge e Firefox.'
+                });
+                return;
+            }
+
+            finalizarComErro(errosRecentes, codigo);
+        });
+
+        return true;
+    }
+
+    if (!executarTentativa()) {
+        return {
+            sucesso: false,
+            mensagem: 'Não foi possível iniciar o download.'
+        };
+    }
 
     return {
         sucesso: true,

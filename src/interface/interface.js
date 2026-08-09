@@ -25,6 +25,12 @@ document.addEventListener('click', evento => {
     window.apiMPTreco.abrirLinkExterno(link.href);
 });
 
+campoUrl.addEventListener('contextmenu', evento => {
+    evento.preventDefault();
+    campoUrl.focus();
+    window.apiMPTreco.mostrarMenuEdicao();
+});
+
 function mostrarMensagem(texto, tipo = 'informacao') {
     mensagem.textContent = texto;
     mensagem.className = `mensagem ${tipo}`;

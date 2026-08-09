@@ -1,6 +1,6 @@
 {
   "name": "mptreco",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Aplicativo para baixar vídeos e áudios de sites compatíveis com yt-dlp.",
   "author": {
     "name": "MatheusDAGL"
@@ -38,9 +38,9 @@
         "to": "bin"
       }
     ],
-        "win": {
-            "target": "nsis",
-            "signAndEditExecutable": false
+    "win": {
+      "target": "nsis",
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,

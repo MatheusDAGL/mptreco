@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('apiMPTreco', {
     obterUltimaPasta: () => ipcRenderer.invoke('obter-ultima-pasta'),
     abrirLinkExterno: url => ipcRenderer.invoke('abrir-link-externo', url),
     abrirLocalDoArquivo: () => ipcRenderer.invoke('abrir-local-do-arquivo'),
+    mostrarMenuEdicao: () => ipcRenderer.send('mostrar-menu-edicao'),
     verificarFerramentas: () => ipcRenderer.invoke('verificar-ferramentas'),
     iniciarDownload: dados => ipcRenderer.invoke('iniciar-download', dados),
     cancelarDownload: () => ipcRenderer.invoke('cancelar-download'),
