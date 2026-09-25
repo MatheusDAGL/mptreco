@@ -71,5 +71,5 @@ mptreco/
 - A opção MP3 usa o FFmpeg para extrair e converter o áudio.
 - A opção Vídeo tenta gerar um arquivo MP4 com áudio incorporado.
 - O projeto aceita URLs HTTP e HTTPS de sites compatíveis com o yt-dlp.
-- Links de playlists também são processados pelo yt-dlp.
+- Links de playlists do YouTube são baixados em uma subpasta com o nome da playlist.
 - O programa não usa `exec()` nem concatenação de comandos. Os argumentos são enviados separadamente ao processo `yt-dlp`.

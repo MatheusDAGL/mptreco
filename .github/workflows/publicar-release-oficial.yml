@@ -1,0 +1,242 @@
+name: Publicar Release Oficial
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag que será publicada ou atualizada, por exemplo: v1.2.2"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  publicar-release:
+    name: Gerar instalador e publicar Release
+    runs-on: windows-latest
+
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+    steps:
+      - name: Obter código da versão
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Validar tag anotada e versão do projeto
+        id: version
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          if ($env:RELEASE_TAG -notmatch '^v(?<version>[0-9]+\.[0-9]+\.[0-9]+)$') {
+              throw "A tag '$env:RELEASE_TAG' não segue o padrão vMAJOR.MINOR.PATCH."
+          }
+
+          $version = $Matches['version']
+
+          git rev-parse "$env:RELEASE_TAG^{commit}" | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+              throw "A tag '$env:RELEASE_TAG' não foi encontrada no repositório."
+          }
+
+          git cat-file -e "$env:RELEASE_TAG^{tag}"
+          if ($LASTEXITCODE -ne 0) {
+              throw "A tag $env:RELEASE_TAG precisa ser anotada para conter as notas da Release."
+          }
+
+          $package = Get-Content -LiteralPath 'package.json' -Raw | ConvertFrom-Json
+          if ([string] $package.version -ne $version) {
+              throw "A versão do package.json ($($package.version)) não corresponde à tag ($version)."
+          }
+
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          Write-Host "Tag e versão validadas: $env:RELEASE_TAG"
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependências e preparar ferramentas
+        shell: pwsh
+        run: npm.cmd ci
+
+      - name: Gerar instalador Windows
+        shell: pwsh
+        run: npm.cmd run dist
+
+      - name: Validar arquivos de atualização gerados
+        id: installer
+        shell: pwsh
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installerName = "MPTreco-Setup-$env:APP_VERSION.exe"
+          $installerPath = Join-Path $PWD "dist\$installerName"
+          $blockmapName = "$installerName.blockmap"
+          $blockmapPath = Join-Path $PWD "dist\$blockmapName"
+          $metadataPath = Join-Path $PWD 'dist\latest.yml'
+
+          foreach ($file in @($installerPath, $blockmapPath, $metadataPath)) {
+              if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+                  throw "Arquivo de atualização não foi gerado: $file"
+              }
+              if ((Get-Item -LiteralPath $file).Length -le 0) {
+                  throw "Arquivo de atualização está vazio: $file"
+              }
+          }
+
+          $metadata = Get-Content -LiteralPath $metadataPath -Raw
+          if ($metadata -notmatch "(?m)^version:\s*$([regex]::Escape($env:APP_VERSION))\s*$") {
+              throw 'A versão em latest.yml não corresponde à tag.'
+          }
+          if (-not $metadata.Contains($installerName)) {
+              throw 'O latest.yml não aponta para o instalador gerado.'
+          }
+
+          "installer_name=$installerName" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "installer_path=$installerPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "blockmap_name=$blockmapName" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "blockmap_path=$blockmapPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "metadata_path=$metadataPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          Get-Item -LiteralPath $installerPath, $blockmapPath, $metadataPath |
+              Format-Table Name, Length, LastWriteTime
+
+      - name: Extrair notas e título da tag
+        id: release
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $notesFile = Join-Path $env:RUNNER_TEMP "release-$env:RELEASE_TAG.md"
+
+          $notes = @(git for-each-ref "refs/tags/$env:RELEASE_TAG" '--format=%(contents)')
+          if ($LASTEXITCODE -ne 0 -or $notes.Count -eq 0) {
+              throw "Não foi possível extrair as notas da tag $env:RELEASE_TAG."
+          }
+
+          $notes | Set-Content -LiteralPath $notesFile -Encoding utf8
+          if ((Get-Item -LiteralPath $notesFile).Length -le 0) {
+              throw "As notas da tag $env:RELEASE_TAG estão vazias."
+          }
+
+          $titleLine = Get-Content -LiteralPath $notesFile |
+              Where-Object { $_.Trim().StartsWith('#') } |
+              Select-Object -First 1
+
+          $title = if ([string]::IsNullOrWhiteSpace($titleLine)) {
+              "MPTreco $env:RELEASE_TAG"
+          } else {
+              $titleLine.Trim().TrimStart('#').Trim()
+          }
+
+          "notes_file=$notesFile" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "title=$title" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Criar ou atualizar Release e anexar arquivos de atualização
+        shell: pwsh
+        env:
+          INSTALLER_PATH: ${{ steps.installer.outputs.installer_path }}
+          BLOCKMAP_PATH: ${{ steps.installer.outputs.blockmap_path }}
+          METADATA_PATH: ${{ steps.installer.outputs.metadata_path }}
+          NOTES_FILE: ${{ steps.release.outputs.notes_file }}
+          RELEASE_TITLE: ${{ steps.release.outputs.title }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $assets = @($env:INSTALLER_PATH, $env:BLOCKMAP_PATH, $env:METADATA_PATH)
+
+          gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY *> $null
+          $releaseExists = $LASTEXITCODE -eq 0
+
+          if ($releaseExists) {
+              gh release edit $env:RELEASE_TAG `
+                  --repo $env:GITHUB_REPOSITORY `
+                  --title $env:RELEASE_TITLE `
+                  --notes-file $env:NOTES_FILE `
+                  --latest
+              if ($LASTEXITCODE -ne 0) {
+                  throw "Não foi possível atualizar a Release $env:RELEASE_TAG."
+              }
+
+              gh release upload $env:RELEASE_TAG @assets `
+                  --repo $env:GITHUB_REPOSITORY `
+                  --clobber
+              if ($LASTEXITCODE -ne 0) {
+                  throw "Não foi possível anexar os arquivos de atualização à Release $env:RELEASE_TAG."
+              }
+          } else {
+              gh release create $env:RELEASE_TAG @assets `
+                  --repo $env:GITHUB_REPOSITORY `
+                  --verify-tag `
+                  --title $env:RELEASE_TITLE `
+                  --notes-file $env:NOTES_FILE `
+                  --latest
+              if ($LASTEXITCODE -ne 0) {
+                  throw "Não foi possível criar a Release $env:RELEASE_TAG."
+              }
+          }
+
+      - name: Validar Release publicada
+        id: published
+        shell: pwsh
+        env:
+          INSTALLER_NAME: ${{ steps.installer.outputs.installer_name }}
+          BLOCKMAP_NAME: ${{ steps.installer.outputs.blockmap_name }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $releaseJson = gh release view $env:RELEASE_TAG `
+              --repo $env:GITHUB_REPOSITORY `
+              --json body,assets,url
+
+          if ($LASTEXITCODE -ne 0) {
+              throw "Não foi possível consultar a Release $env:RELEASE_TAG."
+          }
+
+          $release = $releaseJson | ConvertFrom-Json
+          if ([string]::IsNullOrWhiteSpace([string] $release.body)) {
+              throw 'A Release foi criada sem descrição.'
+          }
+
+          foreach ($name in @($env:INSTALLER_NAME, $env:BLOCKMAP_NAME, 'latest.yml')) {
+              $asset = @($release.assets | Where-Object { $_.name -eq $name })
+              if ($asset.Count -eq 0) {
+                  throw "O arquivo '$name' não foi anexado à Release."
+              }
+          }
+
+          "release_url=$($release.url)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Gerar resumo da execução
+        shell: pwsh
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+          INSTALLER_NAME: ${{ steps.installer.outputs.installer_name }}
+          RELEASE_TITLE: ${{ steps.release.outputs.title }}
+          RELEASE_URL: ${{ steps.published.outputs.release_url }}
+        run: |
+          @(
+              '# Release publicada com sucesso'
+              ''
+              '| Informação | Valor |'
+              '|---|---|'
+              "| Versão | ``$env:APP_VERSION`` |"
+              "| Tag | ``$env:RELEASE_TAG`` |"
+              "| Título | $env:RELEASE_TITLE |"
+              "| Instalador | ``$env:INSTALLER_NAME`` |"
+              '| Atualização | `latest.yml` e `.blockmap` publicados |'
+              "| Release | $env:RELEASE_URL |"
+          ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append

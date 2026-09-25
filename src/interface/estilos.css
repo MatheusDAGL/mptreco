@@ -70,11 +70,58 @@ h1 {
     text-align: center;
 }
 
+.linha-versao {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    flex-wrap: wrap;
+    column-gap: 7px;
+}
+
+.cabecalho .versao-aplicacao {
+    margin-bottom: 0;
+    color: #8f8f95;
+    font-size: 12px;
+    line-height: 1.4;
+    text-align: center;
+}
+
 .cabecalho p {
     margin-bottom: 0;
     color: #a8a8ad;
     font-size: 15px;
     line-height: 1.6;
+}
+
+.botao-atualizacao {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    color: #ff8a38;
+    background: transparent;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1.5;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.botao-atualizacao[hidden] {
+    display: none;
+}
+
+.botao-atualizacao:hover:not(:disabled) {
+    color: #ffb05b;
+}
+
+.botao-atualizacao:focus-visible {
+    outline: 2px solid #ff8a38;
+    outline-offset: 3px;
+}
+
+.botao-atualizacao:disabled {
+    cursor: default;
+    text-decoration: none;
 }
 
 .painel {

@@ -11,8 +11,45 @@ const textoStatus = document.getElementById('texto-status');
 const textoVelocidade = document.getElementById('texto-velocidade');
 const textoTempoRestante = document.getElementById('texto-tempo-restante');
 const mensagem = document.getElementById('mensagem');
+const versaoAplicacao = document.getElementById('versao-aplicacao');
+const botaoAtualizacao = document.getElementById('botao-atualizacao');
 
 let downloadEmAndamento = false;
+
+function mostrarEstadoAtualizacao(estado) {
+    const versao = estado?.versao;
+    const status = estado?.status;
+
+    botaoAtualizacao.hidden = !versao || status === 'oculto';
+    botaoAtualizacao.disabled = status !== 'disponivel' && status !== 'erro';
+
+    if (status === 'disponivel') {
+        botaoAtualizacao.textContent = `Nova versão ${versao} disponível. Instalar agora?`;
+    } else if (status === 'baixando') {
+        botaoAtualizacao.textContent = `Baixando atualização ${versao}: ${estado.percentual || 0}%`;
+    } else if (status === 'instalando') {
+        botaoAtualizacao.textContent = 'Atualização pronta. Instalando e reiniciando...';
+    } else if (status === 'erro') {
+        botaoAtualizacao.textContent = 'Falha ao atualizar. Clique para tentar novamente.';
+    }
+}
+
+botaoAtualizacao.addEventListener('click', async () => {
+    botaoAtualizacao.disabled = true;
+    try {
+        const resultado = await window.apiMPTreco.instalarAtualizacao();
+
+        if (!resultado.sucesso) {
+            mostrarMensagem(resultado.mensagem, 'erro');
+            mostrarEstadoAtualizacao(await window.apiMPTreco.obterEstadoAtualizacao());
+        }
+    } catch {
+        mostrarMensagem('Não foi possível iniciar a atualização. Tente novamente.', 'erro');
+        botaoAtualizacao.disabled = false;
+    }
+});
+
+window.apiMPTreco.aoAtualizarEstadoAtualizacao(mostrarEstadoAtualizacao);
 
 document.addEventListener('click', evento => {
     const link = evento.target.closest('a[href]');
@@ -230,10 +267,15 @@ window.apiMPTreco.aoFinalizarDownload(resultado => {
 });
 
 async function inicializarAplicacao() {
-    const [resultadoFerramentas, resultadoPasta] = await Promise.all([
+    const [resultadoFerramentas, resultadoPasta, versao, atualizacao] = await Promise.all([
         window.apiMPTreco.verificarFerramentas(),
-        window.apiMPTreco.obterUltimaPasta()
+        window.apiMPTreco.obterUltimaPasta(),
+        window.apiMPTreco.obterVersaoAplicacao(),
+        window.apiMPTreco.obterEstadoAtualizacao()
     ]);
+
+    versaoAplicacao.textContent = `Versão ${versao}`;
+    mostrarEstadoAtualizacao(atualizacao);
 
     if (resultadoPasta.pasta) {
         campoPasta.value = resultadoPasta.pasta;

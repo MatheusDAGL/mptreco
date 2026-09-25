@@ -10,6 +10,7 @@ const {
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+const { autoUpdater } = require('electron-updater');
 
 if (process.platform === 'win32') {
     app.setAppUserModelId('com.matheusdagl.mptreco');
@@ -19,6 +20,73 @@ let janelaPrincipal = null;
 let processoDownload = null;
 let downloadCancelado = false;
 let ultimaPastaDownloadConcluida = '';
+let estadoAtualizacao = { status: 'oculto' };
+let atualizacaoIniciada = false;
+
+function atualizarEstadoAtualizacao(estado) {
+    estadoAtualizacao = estado;
+    enviarParaTela('estado-atualizacao', estado);
+}
+
+function configurarAtualizacoes() {
+    if (!app.isPackaged || process.platform !== 'win32') {
+        return;
+    }
+
+    autoUpdater.autoDownload = false;
+    autoUpdater.autoInstallOnAppQuit = false;
+    autoUpdater.allowPrerelease = false;
+
+    autoUpdater.on('update-available', informacoes => {
+        atualizarEstadoAtualizacao({
+            status: 'disponivel',
+            versao: informacoes.version
+        });
+    });
+
+    autoUpdater.on('update-not-available', () => {
+        if (!atualizacaoIniciada) {
+            atualizarEstadoAtualizacao({ status: 'oculto' });
+        }
+    });
+
+    autoUpdater.on('download-progress', progresso => {
+        atualizarEstadoAtualizacao({
+            status: 'baixando',
+            versao: estadoAtualizacao.versao,
+            percentual: Math.min(99, Math.floor(progresso.percent || 0))
+        });
+    });
+
+    autoUpdater.on('update-downloaded', () => {
+        atualizarEstadoAtualizacao({
+            status: 'instalando',
+            versao: estadoAtualizacao.versao
+        });
+        autoUpdater.quitAndInstall(false, true);
+    });
+
+    autoUpdater.on('error', erro => {
+        console.error('Falha na atualização do MPTreco:', erro);
+        if (atualizacaoIniciada) {
+            atualizacaoIniciada = false;
+            atualizarEstadoAtualizacao({
+                status: 'erro',
+                versao: estadoAtualizacao.versao
+            });
+        }
+    });
+}
+
+function verificarAtualizacoes() {
+    if (!app.isPackaged || process.platform !== 'win32') {
+        return;
+    }
+
+    autoUpdater.checkForUpdates().catch(erro => {
+        console.error('Não foi possível consultar atualizações:', erro);
+    });
+}
 
 function obterCaminhosFerramentas() {
     const extensao = process.platform === 'win32' ? '.exe' : '';
@@ -65,6 +133,10 @@ function criarJanela() {
 
     Menu.setApplicationMenu(null);
     janelaPrincipal.loadFile(path.join(__dirname, 'interface', 'index.html'));
+
+    janelaPrincipal.webContents.once('did-finish-load', () => {
+        setTimeout(verificarAtualizacoes, 1500);
+    });
 
     janelaPrincipal.once('ready-to-show', () => {
         janelaPrincipal.show();
@@ -158,12 +230,14 @@ function criarArgumentosDownload({
     url,
     formato,
     pastaDestino,
+    usarPastaPlaylist = false,
     navegadorCookies = ''
 }) {
     const ferramentas = obterCaminhosFerramentas();
     const modeloSaida = path.join(
         pastaDestino,
-        '%(title).180B [%(id)s].%(ext)s'
+        ...(usarPastaPlaylist ? ['%(playlist_title).180B'] : []),
+        '%(title).180B.%(ext)s'
     );
 
     const argumentos = [
@@ -229,6 +303,24 @@ function ehUrlYoutube(valor) {
     }
 }
 
+function ehUrlPlaylistYoutube(valor) {
+    if (!ehUrlYoutube(valor)) {
+        return false;
+    }
+
+    try {
+        const url = new URL(valor);
+        const caminho = url.pathname.toLowerCase().replace(/\/+$/, '');
+
+        return (
+            caminho === '/playlist' &&
+            Boolean(url.searchParams.get('list')?.trim())
+        );
+    } catch {
+        return false;
+    }
+}
+
 function ehBloqueioTooManyRequests(linhas) {
     const texto = linhas.join('\n').toLowerCase();
 
@@ -262,7 +354,7 @@ function interpretarLinhaSaida(linha, aoEncontrarArquivoFinal = null) {
 
         enviarParaTela('download-progresso', {
             percentual: Number.isFinite(percentual)
-                ? Math.min(100, Math.max(0, percentual))
+                ? Math.min(99, Math.max(0, percentual))
                 : 0,
             velocidade: velocidade.trim(),
             tempoRestante: tempoRestante.trim()
@@ -411,6 +503,43 @@ ipcMain.handle('obter-ultima-pasta', () => ({
     pasta: obterUltimaPasta()
 }));
 
+ipcMain.handle('obter-versao-aplicacao', () => app.getVersion());
+
+ipcMain.handle('obter-estado-atualizacao', () => estadoAtualizacao);
+
+ipcMain.handle('instalar-atualizacao', async () => {
+    if (estadoAtualizacao.status !== 'disponivel' && estadoAtualizacao.status !== 'erro') {
+        return { sucesso: false, mensagem: 'Nenhuma atualização está disponível.' };
+    }
+
+    if (processoDownload) {
+        return {
+            sucesso: false,
+            mensagem: 'Aguarde o download atual terminar antes de instalar a atualização.'
+        };
+    }
+
+    atualizacaoIniciada = true;
+    atualizarEstadoAtualizacao({
+        status: 'baixando',
+        versao: estadoAtualizacao.versao,
+        percentual: 0
+    });
+
+    try {
+        await autoUpdater.downloadUpdate();
+        return { sucesso: true };
+    } catch (erro) {
+        console.error('Não foi possível baixar a atualização:', erro);
+        atualizacaoIniciada = false;
+        atualizarEstadoAtualizacao({
+            status: 'erro',
+            versao: estadoAtualizacao.versao
+        });
+        return { sucesso: false, mensagem: 'Falha ao baixar a atualização. Tente novamente.' };
+    }
+});
+
 ipcMain.handle('abrir-link-externo', async (_evento, url) => {
     if (!validarUrlExterna(url)) {
         return { sucesso: false };
@@ -486,6 +615,13 @@ ipcMain.handle('iniciar-download', async (_evento, dados) => {
         };
     }
 
+    if (atualizacaoIniciada) {
+        return {
+            sucesso: false,
+            mensagem: 'Aguarde a atualização do aplicativo terminar antes de iniciar um download.'
+        };
+    }
+
     const url = typeof dados?.url === 'string' ? dados.url.trim() : '';
     const formato = dados?.formato;
     const pastaDestino = dados?.pastaDestino;
@@ -531,6 +667,7 @@ ipcMain.handle('iniciar-download', async (_evento, dados) => {
     downloadCancelado = false;
 
     const youtube = ehUrlYoutube(url);
+    const usarPastaPlaylist = ehUrlPlaylistYoutube(url);
     const fallbacksYoutube = [
         { id: 'chrome', nome: 'Chrome' },
         { id: 'edge', nome: 'Edge' },
@@ -562,6 +699,7 @@ ipcMain.handle('iniciar-download', async (_evento, dados) => {
             url,
             formato,
             pastaDestino,
+            usarPastaPlaylist,
             navegadorCookies: fallback?.id || ''
         });
 
@@ -706,7 +844,10 @@ ipcMain.handle('cancelar-download', () => {
     };
 });
 
-app.whenReady().then(criarJanela);
+app.whenReady().then(() => {
+    configurarAtualizacoes();
+    criarJanela();
+});
 
 app.on('window-all-closed', () => {
     encerrarProcessoDownload();
